@@ -35,6 +35,8 @@
 #define XUE_XHC_DEV_WILDCAT_POINT 0x9CB1ULL
 #define XUE_XHC_DEV_SUNRISE_POINT 0x9D2FULL
 #define XUE_XHC_DEV_CANNON_POINT 0x9DEDULL
+#define XUE_XHC_DEV_APOLLO_LAKE 0x5AA8ULL
+#define XUE_XHC_DEV_LYNX_POINT 0x8CB1ULL
 
 /* DbC idVendor and idProduct */
 #define XUE_DBC_VENDOR 0x1D6B
@@ -67,6 +69,8 @@ static inline int known_xhc(uint32_t dev_ven)
     case (XUE_XHC_DEV_WILDCAT_POINT << 16) | XUE_XHC_VEN_INTEL:
     case (XUE_XHC_DEV_SUNRISE_POINT << 16) | XUE_XHC_VEN_INTEL:
     case (XUE_XHC_DEV_CANNON_POINT << 16) | XUE_XHC_VEN_INTEL:
+    case (XUE_XHC_DEV_APOLLO_LAKE << 16) | XUE_XHC_VEN_INTEL:
+    case (XUE_XHC_DEV_LYNX_POINT << 16) | XUE_XHC_VEN_INTEL:
         return 1;
     default:
         return 0;
@@ -452,11 +456,19 @@ static inline int xue_sys_init(void *sys)
                                efi->img_hand, NULL,
                                EFI_OPEN_PROTOCOL_GET_PROTOCOL);
         if (EFI_ERROR(rc)) {
+            if (rc == EFI_INVALID_PARAMETER) {
+                //(0x7534C298, 0x7231D910, 0x7A38F2C8, 0x0, 0x0, 0x2)
+                xue_debug("Error: Invalid parameter:\n");
+                xue_debug("  (0x%llx, 0x%llx, 0x%llx, 0x%llx, 0x%llx, 0x%lx)\n",
+                          hand[i], &PciIoProtocol, (VOID **)&pci_io,
+                          efi->img_hand, NULL, EFI_OPEN_PROTOCOL_GET_PROTOCOL);
+            }
             continue;
         }
 
         rc = pci_io->Pci.Read(pci_io, EfiPciIoWidthUint32, 0, 1, &dev_ven);
         if (EFI_ERROR(rc)) {
+            xue_debug("EFI_ERROR Pci.Read:0x%llx\n", rc);
             gBS->CloseProtocol(hand[i], &PciIoProtocol, efi->img_hand, NULL);
             continue;
         }
@@ -465,9 +477,12 @@ static inline int xue_sys_init(void *sys)
             efi->pci_hand = hand[i];
             efi->pci_io = pci_io;
             return 1;
+        } else {
+            xue_debug("Unknown device vendor:0x%llx\n", dev_ven);
         }
     }
 
+    xue_debug("nr_hand:0x%llx\n", nr_hand);
     xue_error("Failed to open PCI_IO_PROTOCOL on any known xHC\n");
     return 0;
 }
